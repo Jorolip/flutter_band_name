@@ -4,6 +4,9 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 
 import 'package:my_app_socket/models/band.dart';
+import 'package:provider/provider.dart';
+
+import '../services/socket_service.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({Key? key}) : super(key: key);
@@ -19,10 +22,44 @@ class _HomePageState extends State<HomePage> {
     Band(id: '3', name: 'Zaider', votes: 4),
     Band(id: '4', name: 'Dragon y Caballero', votes: 5),
   ];
+
+  @override
+  void initState() {
+    final socketService = Provider.of<SocketService>(context, listen: false);
+    socketService.socket.on('active-bands', (payload) {
+      bands = (payload as List).map((banda) => Band.fromMap(banda)).toList();
+      setState(() {});
+    });
+    super.initState();
+  }
+
+  @override
+  void dispose() {
+    final socketService = Provider.of<SocketService>(context, listen: false);
+    socketService.socket.off('active-bands');
+    super.dispose();
+  }
+
   @override
   Widget build(BuildContext context) {
+    final socketService = Provider.of<SocketService>(context);
+
     return Scaffold(
       appBar: AppBar(
+        actions: [
+          Container(
+            margin: const EdgeInsets.only(right: 10),
+            child: socketService.serverStatus == ServerStatus.online
+                ? Icon(
+                    Icons.check_circle,
+                    color: Colors.blue[300],
+                  )
+                : const Icon(
+                    Icons.check_circle,
+                    color: Colors.red,
+                  ),
+          )
+        ],
         elevation: 1,
         title: const Text(
           'BandNames',
@@ -43,12 +80,13 @@ class _HomePageState extends State<HomePage> {
   }
 
   Widget _bandTile(Band band) {
+    final socketService = Provider.of<SocketService>(context, listen: false);
+
     return Dismissible(
       key: Key(band.id),
       direction: DismissDirection.startToEnd,
-      onDismissed: (DismissDirection direction) {
-        print('direction: $direction');
-        print('direction: ${band.id}');
+      onDismissed: (_) {
+        socketService.emit('delete-band', {'id': band.id});
       },
       background: Container(
         padding: const EdgeInsets.only(left: 8.0),
@@ -73,7 +111,7 @@ class _HomePageState extends State<HomePage> {
           style: const TextStyle(fontSize: 20),
         ),
         onTap: () {
-          print(band.name);
+          socketService.emit('vote-band', {'id': band.id});
         },
       ),
     );
@@ -128,9 +166,10 @@ class _HomePageState extends State<HomePage> {
   }
 
   void addBandToList(String name) {
+    final socketService = Provider.of<SocketService>(context, listen: false);
+
     if (name.length > 1) {
-      bands.add(Band(id: DateTime.now().toString(), name: name, votes: 0));
-      setState(() {});
+      socketService.emit('add-band', {'name': name});
       //agregamos
     }
     Navigator.pop(context);
